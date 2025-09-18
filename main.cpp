@@ -375,6 +375,69 @@ void simular_alocacao_contigua() {
     imprimir_mapa_e_estatisticas(g_memoria, true);
 }
 
+void adicionar_processos_contigua() {
+    if (!g_simulacao_contigua_realizada) {
+        cout << "Nenhuma simulacao contigua carregada. Execute a opcao 1 primeiro.\n";
+        return;
+    }
+
+    vector<Processo> novos_processos = ler_processos();
+    Estrategia estrategia = escolher_estrategia();
+
+    g_processos_carregados.insert(g_processos_carregados.end(), novos_processos.begin(), novos_processos.end());
+
+    cout << "\n===== Adicionando processos a simulacao contigua =====\n";
+
+    for (const auto& processo : novos_processos) {
+        int passo = esperar_passo();
+        if (passo == 0) {
+            cout << "\nAdicao de processos interrompida pelo usuario.\n";
+            imprimir_mapa_e_estatisticas(g_memoria, true);
+            return;
+        }
+
+        int indice = escolher_segmento(g_memoria, processo.tamanho, estrategia);
+
+        if (indice == -1) {
+            if (existe_buracos_adjacentes(g_memoria)) {
+                cout << "[INFO] Coalescendo buracos livres adjacentes para tentar alocar "
+                     << processo.nome << " (" << processo.tamanho << " KB)...\n";
+                coalescer_buracos(g_memoria);
+                indice = escolher_segmento(g_memoria, processo.tamanho, estrategia);
+                if (indice == -1) {
+                    cout << "[FALHA] Ainda nao foi possivel alocar " << processo.nome
+                         << ". Considere: compactar memoria, liberar processos, mudar estrategia, reordenar carga, paginacao/swapping, aumentar memoria.\n";
+                    continue;
+                }
+            } else {
+                cout << "[FALHA] Processo " << processo.nome << " (" << processo.tamanho
+                     << " KB) nao cabe em nenhum espaco livre.\n";
+                cout << "Sugestoes: compactar; coalescer; liberar processos; mudar estrategia; reordenar; paginacao/swapping; aumentar memoria.\n";
+                continue;
+            }
+        }
+
+        auto& bloco = g_memoria[indice];
+        int sobra = bloco.tamanho - processo.tamanho;
+
+        cout << "[OK] Alocando processo " << processo.nome << " (" << processo.tamanho
+             << " KB) no endereco " << bloco.inicio << " usando "
+             << (estrategia == FIRST_FIT ? "First Fit" : (estrategia == BEST_FIT ? "Best Fit" : "Worst Fit"))
+             << ".\n";
+
+        bloco.livre = false;
+        bloco.processo = processo.nome;
+        bloco.tamanho = processo.tamanho;
+
+        if (sobra > 0) {
+            Segmento novo_bloco{ bloco.inicio + processo.tamanho, sobra, true, true, false, "" };
+            g_memoria.insert(g_memoria.begin() + (indice + 1), novo_bloco);
+        }
+    }
+
+    imprimir_mapa_e_estatisticas(g_memoria, true);
+}
+
 vector<int> ler_requisicoes() {
     int n;
     while (true) {
@@ -455,7 +518,6 @@ void simular_paginacao() {
     cout << "Sequencia de requisicoes: " << seq_str << endl;
     cout << "Algoritmo: " << (algoritmo == FIFO ? "FIFO" : (algoritmo == LRU ? "LRU" : "Otimo")) << endl;
 
-
     cout << left << setw(6) << "Req";
     for (int i = 0; i < num_frames; ++i) {
         cout << setw(10) << ("F" + to_string(i));
@@ -522,7 +584,6 @@ void simular_paginacao() {
             continue;
         }
 
-
         int victim_idx = empty_idx;
         bool is_replace = (empty_idx == -1);
 
@@ -570,14 +631,12 @@ void simular_paginacao() {
             if (algoritmo == FIFO) fifo_queue.pop();
         }
 
-
         frames[victim_idx] = req;
         if (algoritmo == FIFO) fifo_queue.push(victim_idx);
         if (algoritmo == LRU) use_time[victim_idx] = tempo;
 
         ++page_faults;
 
- 
         string event2 = is_replace ? "Apos troca" : "Carrega " + to_string(req);
         cout << left << setw(6) << req;
         for (int i = 0; i < num_frames; ++i) {
@@ -608,7 +667,6 @@ void simular_paginacao() {
         cout << "Taxa de page faults: " << fixed << setprecision(2) << fault_rate << "%\n";
         cout << "Taxa de acertos: " << fixed << setprecision(2) << hit_rate << "%\n";
 
-  
         g_page_faults = page_faults;
         g_fault_rate = fault_rate;
         g_hit_rate = hit_rate;
@@ -641,6 +699,7 @@ void apresentacao_menu() {
     cout << "4 - Liberar processo por nome (com coalescencia)\n";
     cout << "5 - Compactar memoria\n";
     cout << "6 - Mostrar mapa/estatisticas\n";
+    cout << "7 - Adicionar processos (alocacao contigua)\n";
     cout << "0 - Sair" << endl;
     cout << "------------------------------" << endl;
     cout << "> Escolha uma opcao: ";
@@ -701,8 +760,13 @@ int main() {
                 imprimir_mapa_e_estatisticas(g_memoria, true);
                 break;
 
+            case 7:
+                cout << "\n[Adicionar Processos - Alocacao Contigua]\n";
+                adicionar_processos_contigua();
+                break;
+
             default:
-                cout << "\nOpcao invalida! Escolha um valor entre 0 e 6.\n\n";
+                cout << "\nOpcao invalida! Escolha um valor entre 0 e 7.\n\n";
                 break;
         }
     }
