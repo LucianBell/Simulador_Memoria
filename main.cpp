@@ -590,6 +590,7 @@ void simular_paginacao() {
         if (is_replace) {
             if (algoritmo == FIFO) {
                 victim_idx = fifo_queue.front();
+                fifo_queue.pop();
             } else if (algoritmo == LRU) {
                 int min_t = INT_MAX;
                 for (int i = 0; i < num_frames; ++i) {
@@ -626,9 +627,7 @@ void simular_paginacao() {
                 cout << left << setw(10) << content;
                 if (!color.empty()) cout << RESET;
             }
-            cout << setw(22) << event1 << page_faults << endl;
-
-            if (algoritmo == FIFO) fifo_queue.pop();
+            cout << setw(22) << event1 << page_faults + 1 << endl;
         }
 
         frames[victim_idx] = req;
